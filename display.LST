@@ -1,0 +1,354 @@
+C51 COMPILER V9.00   DISPLAY                                                               08/22/2020 13:24:46 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE DISPLAY
+OBJECT MODULE PLACED IN display.OBJ
+COMPILER INVOKED BY: D:\C51\BIN\C51.EXE display.c BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include "display.h"
+   2          //#include "sys_cfg.h"
+   3          
+   4          
+   5          
+   6          /***********LCD12864液晶测忙子程序(读状态)************/ 
+   7          void Busy()   
+   8          {   
+   9   1              uchar busy;
+  10   1              do  
+  11   1              {      
+  12   2                      E = 0;      //0为关闭使能端,1为打开使能端      
+  13   2                      DI = 0;      //1为指令,0为数据      
+  14   2                      RW = 1;    //1为读,0为写       
+  15   2                      Delay_1ms(20);  //延时20乘以120时间      
+  16   2                      E = 1;     //0为关闭使能端,1为打开使能端  
+  17   2                      P2M0=0x00;
+  18   2                      P2M1=0x00;      //将P2设为准双向（传统51IO口）  
+  19   2                      busy=P2;    //读取P2状态      
+  20   2                      Delay_1ms(20);  //延时20乘以120时间      
+  21   2                      E = 0;    //0为关闭使能端,1为打开使能端     
+  22   2              }while(busy&0x80);  //判断BUSY位是否工作:1为内部在工作,0为正常状态 
+  23   1      }  
+  24          /***********LCD12864液晶数据写入子程序*************/ 
+  25          void Write_Data(uchar k) 
+  26          {   
+  27   1              Busy();   //测忙
+  28   1              E =1;   //0为关闭使能端,1为打开使能端    
+  29   1              DI=1;   //1为指令,0为数据    
+  30   1              RW=0;   //1为读,0为写   
+  31   1              P2M0=0xFF;
+  32   1              P2M1=0x00;      //将P2设为推挽          
+  33   1              P2=k;   //输入数据K到DATA    
+  34   1              Delay_1ms(5); //延时20乘以120时间    
+  35   1              E =0;    //0为关闭使能端,1为打开使能端    
+  36   1      //      Delay_1ms(20);   //延时20乘以120时间 
+  37   1      }  
+  38          
+  39          /**********LCD12864液晶命令写入子程序**************/ 
+  40          void Write_Cmd(uchar cmd) 
+  41          {      
+  42   1              Busy();    //测忙
+  43   1              E=1;   //0为关闭使能端,1为打开使能端     
+  44   1              DI=0;    //1为指令,0为数据     
+  45   1              RW=0;   //1为读,0为写   
+  46   1              P2M0=0xFF;
+  47   1              P2M1=0x00;      //将P2设为推挽 
+  48   1              P2=cmd;    //输入命令cmd到DATA     
+  49   1              Delay_1ms(1); //延时20乘以120时间 
+  50   1              E=0;   //0为关闭使能端,1为打开使能端     
+  51   1      //      Delay_1ms(20); //延时20乘以120时间 
+  52   1      }
+  53          
+  54          /******显示数组字符串(显示半宽字型16*8点阵)******/
+  55          void ShowQQChar(uchar addr,uchar *english,uchar count)//DDRAM地址，数据首字节指针，数据长度
+C51 COMPILER V9.00   DISPLAY                                                               08/22/2020 13:24:46 PAGE 2   
+
+  56          {
+  57   1              uchar i;
+  58   1              Write_Cmd(addr); //设定DDRAM地址
+  59   1              for(i=0;i<count;)
+  60   1              {
+  61   2                      Write_Data(english[i*2]);
+  62   2                      Write_Data(english[i*2+1]);
+  63   2                      i++;
+  64   2              }
+  65   1      }
+  66          
+  67          /******************字符和汉字显示****************/ 
+  68          void Disp(uchar y,uchar x,uchar i,uchar *z)   
+  69          {     
+  70   1              uchar Address;    
+  71   1              //Y判断第几行,X判断第几列,0x80为液晶行初始地址    
+  72   1              if(y==1)  Address=0x80+x;
+  73   1              if(y==2)  Address=0x90+x;        
+  74   1              if(y==3)  Address=0x88+x;    
+  75   1              if(y==4)  Address=0x98+x;  
+  76   1              Write_Cmd(Address);             //写入地址命令到LCD12864  
+  77   1              while(i--)                              //写入显示数据的大小  
+  78   1              {    
+  79   2                      Write_Data(*(z++));     //写入显示数据到LCD12864    
+  80   2                      //i--;         
+  81   2              }   
+  82   1      } 
+  83                  
+  84          void WRCGRAM1(uchar addr)//单下划线
+  85          {
+  86   1              uchar i;
+  87   1              for(i=0;i<2;)
+  88   1              {
+  89   2                      Write_Cmd(addr+i); //设定CGRAM地址
+  90   2                      Write_Data(0xff);
+  91   2                      Write_Data(0x00);
+  92   2                      i++;
+  93   2                      Write_Cmd(addr+i); //设定CGRAM地址
+  94   2                      Write_Data(0x00);
+  95   2                      Write_Data(0x00);
+  96   2                      i++;
+  97   2              }
+  98   1              for(i=2;i<16;i++)
+  99   1              {
+ 100   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 101   2                      Write_Data(0x00);
+ 102   2                      Write_Data(0x00);
+ 103   2              }
+ 104   1      }
+ 105          
+ 106          void WRCGRAM2(uchar addr)//双下划线
+ 107          {
+ 108   1              uchar i;
+ 109   1              for(i=0;i<4;)
+ 110   1              {
+ 111   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 112   2                      Write_Data(0xff);
+ 113   2                      Write_Data(0x00);
+ 114   2                      i++;
+ 115   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 116   2                      Write_Data(0x00);
+ 117   2                      Write_Data(0x00);
+C51 COMPILER V9.00   DISPLAY                                                               08/22/2020 13:24:46 PAGE 3   
+
+ 118   2                      i++;
+ 119   2              }
+ 120   1              for(i=4;i<16;i++)
+ 121   1              {
+ 122   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 123   2                      Write_Data(0x00);
+ 124   2                      Write_Data(0x00);
+ 125   2              }
+ 126   1      }
+ 127          
+ 128          void WRCGRAM3(uchar addr)//单下划线加点
+ 129          {
+ 130   1              uchar i;
+ 131   1              for(i=0;i<2;)
+ 132   1              {
+ 133   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 134   2                      Write_Data(0xff);
+ 135   2                      Write_Data(0x00);
+ 136   2                      i++;
+ 137   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 138   2                      Write_Data(0x00);
+ 139   2                      Write_Data(0x00);
+ 140   2                      i++;
+ 141   2              }
+ 142   1              for(i=2;i<6;)
+ 143   1              {
+ 144   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 145   2                      Write_Data(0x00);
+ 146   2                      Write_Data(0x00);
+ 147   2                      i++;
+ 148   2              }
+ 149   1              Write_Cmd(addr+6);Write_Data(0x18);Write_Data(0x00);
+ 150   1              Write_Cmd(addr+7);Write_Data(0x3c);Write_Data(0x00);
+ 151   1              Write_Cmd(addr+8);Write_Data(0x3c);Write_Data(0x00);
+ 152   1              Write_Cmd(addr+9);Write_Data(0x18);Write_Data(0x00);
+ 153   1              for(i=10;i<16;i++)
+ 154   1              {
+ 155   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 156   2                      Write_Data(0x00);
+ 157   2                      Write_Data(0x00);
+ 158   2              }
+ 159   1      }
+ 160          
+ 161          void WRCGRAM4(uchar addr)//双下划线加点
+ 162          {
+ 163   1              uchar i;
+ 164   1              for(i=0;i<4;)
+ 165   1              {
+ 166   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 167   2                      Write_Data(0xff);
+ 168   2                      Write_Data(0x00);
+ 169   2                      i++;
+ 170   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 171   2                      Write_Data(0x00);
+ 172   2                      Write_Data(0x00);
+ 173   2                      i++;
+ 174   2              }
+ 175   1              Write_Cmd(addr+4);Write_Data(0x00);Write_Data(0x00);
+ 176   1          Write_Cmd(addr+5);Write_Data(0x00);Write_Data(0x00);
+ 177   1              Write_Cmd(addr+6);Write_Data(0x18);Write_Data(0x00);
+ 178   1              Write_Cmd(addr+7);Write_Data(0x3c);Write_Data(0x00);
+ 179   1              Write_Cmd(addr+8);Write_Data(0x3c);Write_Data(0x00);
+C51 COMPILER V9.00   DISPLAY                                                               08/22/2020 13:24:46 PAGE 4   
+
+ 180   1              Write_Cmd(addr+9);Write_Data(0x18);Write_Data(0x00);
+ 181   1              for(i=10;i<16;i++)
+ 182   1              {
+ 183   2                      Write_Cmd(addr+i); //设定CGRAM地址
+ 184   2                      Write_Data(0x00);
+ 185   2                      Write_Data(0x00);
+ 186   2              }
+ 187   1      }
+ 188          
+ 189          /**********************绘图清屏********************/
+ 190          void CLEARGDRAM(void)
+ 191          {
+ 192   1              uchar j;
+ 193   1              uchar i;
+ 194   1              Write_Cmd(0x34);  //切换扩充指令集
+ 195   1              Write_Cmd(0x36);  //绘图显示开
+ 196   1              for(j=0;j<32;j++)
+ 197   1              {
+ 198   2                      Write_Cmd(0x80+j);//y坐标 共32行
+ 199   2                      Write_Cmd(0x80);//X坐标
+ 200   2                      for(i=0;i<32;i++)//
+ 201   2                      {
+ 202   3                              Write_Data(0x00);//绘空格32*8个即256空格
+ 203   3                      }
+ 204   2              }
+ 205   1      }
+ 206          
+ 207          //写入GDRAM 绘图,Y是Y绘图坐标,2个字节一行,CLONG是图形长度,以字节
+ 208          //为单位;HIGHT是图形高度,TAB是图形数据表.12864M的图形显示是相当于256*32.
+ 209          //由两屏128*32上下两屏组成，同一行的下屏的头地址紧接上屏的未地址。
+ 210          //绘图在串口输入时,会比在并口下的输入要慢一些
+ 211          void WRGDRAM(uchar Y1,uchar clong,uchar hight,uchar *TAB1)
+ 212          {
+ 213   1              uint k;
+ 214   1              uchar j;
+ 215   1              uchar i;
+ 216   1              Write_Cmd(0x34); // 打开扩充指令集
+ 217   1              Write_Cmd(0x36);
+ 218   1              for(j=0;j<hight;j++)//32
+ 219   1              { //先上半屏
+ 220   2                      Write_Cmd(Y1+j); //Y总坐标,即第几行
+ 221   2                      Write_Cmd(0x80);//X坐标0，即横数第0个字节开始写起               
+ 222   2                      for(i=0;i<clong;i++)//
+ 223   2                      {
+ 224   3                              Write_Data(TAB1[clong*j+i]);
+ 225   3                      }
+ 226   2              //后下半屏
+ 227   2                      for(k=0;k<clong;k++)//
+ 228   2                      {
+ 229   3                              Write_Data(TAB1[clong*(j+hight)+k]);
+ 230   3                      }
+ 231   2              }
+ 232   1              Write_Cmd(0x30);
+ 233   1      }
+ 234          
+ 235          /***********************插入光标*********************/ 
+ 236          void Cursor(uchar x,uchar y)
+ 237          {
+ 238   1              Write_Cmd(0x34);
+ 239   1              Write_Cmd(y);
+ 240   1              Write_Cmd(x);
+ 241   1      }
+C51 COMPILER V9.00   DISPLAY                                                               08/22/2020 13:24:46 PAGE 5   
+
+ 242          
+ 243          /***********************插入图标*********************/ 
+ 244          void DISPIcon(uchar x,uchar y,uchar clong,uchar hight,uchar *Icon)
+ 245          {
+ 246   1              uchar i,j;
+ 247   1              for(i=0;i<hight;i++)
+ 248   1              {
+ 249   2                      if(y+i<32)
+ 250   2                              Cursor(0x80+x/16,0x80+y+i);//上半屏设定起始位置
+ 251   2                      else
+ 252   2                              Cursor(0x88+x/16,0x80-32+y+i);//下半屏设定起始位置
+ 253   2                      for(j=0;j<clong;j++)
+ 254   2                              Write_Data(Icon[clong*i+j]);
+ 255   2              }
+ 256   1              Write_Cmd(0x36);
+ 257   1              Write_Cmd(0x30);
+ 258   1      } 
+ 259          
+ 260          /**************LCD12864液晶初始化子程序*************/ 
+ 261          void Ini_Lcd(void)     
+ 262          {     
+ 263   1               PSB=1;     
+ 264   1               Delay_1ms(10);                  
+ 265   1               Write_Cmd(0x30);   //基本指令集     
+ 266   1               Delay_1ms(10);      
+ 267   1               Write_Cmd(0x02);   //地址归位     
+ 268   1               Delay_1ms(10);      
+ 269   1               Write_Cmd(0x0c);   //整体显示打开,游标关闭     
+ 270   1               Delay_1ms(10);      
+ 271   1               Write_Cmd(0x06);   //游标右移     
+ 272   1               Delay_1ms(20);      
+ 273   1               Write_Cmd(0x80);   //设定显示的起始地址     
+ 274   1               Delay_1ms(10);      
+ 275   1               Write_Cmd(0x01);   //清除显示 
+ 276   1       }
+ 277          
+ 278          /****************某一行首反白显示******************/
+ 279          void antibackgroud(uint hang)
+ 280          {
+ 281   1              Write_Cmd(0x80+8*(hang/2)+16*(hang%2));
+ 282   1              Write_Cmd(0x0F);
+ 283   1      }
+ 284          
+ 285          /*******************延时子程序  ********************/ 
+ 286          void Delay_1ms(uint x) 
+ 287          {  
+ 288   1              uint j,i;   
+ 289   1              for(j=0;j<x;j++)   
+ 290   1              {    
+ 291   2                      for(i=0;i<120;i++);   //延时X乘以120  
+ 292   2              }  
+ 293   1      }
+ 294          
+ 295          /*************LCD串口时指令和数据之间的延时********/
+ 296          void delayNus(uchar x)
+ 297          {
+ 298   1              uchar k;
+ 299   1              for(k=0;k<x;k++);
+ 300   1      }
+ 301          
+ 302          void set_CGRAM(uchar *zimo)
+ 303          {
+C51 COMPILER V9.00   DISPLAY                                                               08/22/2020 13:24:46 PAGE 6   
+
+ 304   1              uchar i;
+ 305   1              Write_Cmd(0x34);
+ 306   1              Write_Cmd(0x02); //允许设置IRAM和CGRAM地址
+ 307   1              Write_Cmd(0x30);
+ 308   1              //Write_Cmd(0x40+(num<<4)); 
+ 309   1              Write_Cmd(0x40);
+ 310   1              for(i=0;i<16;i++)
+ 311   1              {
+ 312   2                      Write_Data(*zimo++);
+ 313   2                      Write_Data(*zimo++);
+ 314   2              }
+ 315   1      
+ 316   1      }
+ 317          
+ 318          void clear_LCD()
+ 319          {
+ 320   1              Write_Cmd(0x01);
+ 321   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1314    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      51
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

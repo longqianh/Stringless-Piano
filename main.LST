@@ -1,0 +1,1717 @@
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: D:\C51\BIN\C51.EXE main.c BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          /***********************************************
+   2          基于STC15F2K60S2系列单片机C语言编程实现
+   3          使用如下头文件，不用另外再包含"REG51.H"
+   4          #include <STC15F2K60S2.h>
+   5          ***********************************************/
+   6          #include "sys_fun.h"
+   7          #include "songs.h"
+   8          #include "display.h"
+   9          #include <string.h>
+  10          #include <stdio.h>
+  11          
+  12          #define PWMOUT DLED_1
+  13          uchar port_status;
+  14          uchar key;
+  15          uchar tune_cnt=0;
+  16          uchar low_note;
+  17          uchar hi_note;
+  18          uchar PWM_cnt;  //计数
+  19          uchar HighRH = 0; //高电平重载值的高字节
+  20          uchar HighRL = 0; //高电平重载值的低字节
+  21          uchar LowRH = 0; //低电平重载值的高字节
+  22          uchar LowRL = 0; //低电平重载值的低字节
+  23          uchar T1RH = 0; //T1 重载值的高字节
+  24          uchar T1RL = 0; //T1 重载值的低字节     
+  25          uchar bee_cnt=0;
+  26          uchar dc;
+  27          uchar dc_threshold;
+  28          uchar tune_tag=1;
+  29          uchar timer_cnt=0;
+  30          uchar beat_idx=0;
+  31          uchar cover_page=1;
+  32          
+  33          bit stop_flag=0;
+  34          bit bee_flag=0;
+  35          bit pwm_flag=0;
+  36          bit back_flag=0;
+  37          bit song_flag=0;
+  38          bit continue_flag=0;
+  39          bit tie_flag=0;
+  40          
+  41          static bit dir = 0;
+  42          static unsigned char index = 0;
+  43          unsigned long PeriodCnt = 0; //PWM 周期计数值
+  44          unsigned int high, low;
+  45          
+  46          unsigned short code notes[]={0x0000,0xF88C,0xF95B,0xFA15,0xFA67,0xFB04,0xFB90,0xFC0C,
+  47          0xFC44,0xFCAC,0xFD09,0xFD34,0xFD82,0xFDC8,0xFE06,
+  48          0xFE22,0xFE57,0xFE86,0xFE99,0xFEC0,0xFEE3,0xFE02};
+  49                  
+  50          uchar code jia[]={//加[16*16]横排
+  51          0x10,0x00,0x10,0x00,0x10,0x04,0x12,0x7E,
+  52          0xFF,0x44,0x12,0x44,0x12,0x44,0x12,0x44,
+  53          0x12,0x44,0x22,0x44,0x22,0x44,0x22,0x44,
+  54          0x22,0x44,0x4A,0x7C,0x84,0x44,0x00,0x00};
+  55          
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 2   
+
+  56          uchar code you[]={//油[16*16]横排
+  57          0x00,0x40,0x40,0x40,0x30,0x40,0x10,0x44,
+  58          0x87,0xFE,0x64,0x44,0x24,0x44,0x0C,0x44,
+  59          0x14,0x44,0x27,0xFC,0xE4,0x44,0x24,0x44,
+  60          0x24,0x44,0x24,0x44,0x27,0xFC,0x24,0x04};
+  61          
+  62          uchar code xue[]={//学[16*16]横排
+  63          0x22,0x08,0x11,0x08,0x11,0x10,0x00,0x20,
+  64          0x7F,0xFE,0x40,0x02,0x80,0x04,0x1F,0xE0,
+  65          0x00,0x40,0x01,0x84,0xFF,0xFE,0x01,0x00,
+  66          0x01,0x00,0x01,0x00,0x05,0x00,0x02,0x00};
+  67          
+  68          uchar code xi[]={//习[16*16]横排
+  69          0x00,0x00,0x00,0x04,0xFF,0xFE,0x00,0x04,
+  70          0x08,0x04,0x04,0x04,0x02,0x04,0x02,0x24,
+  71          0x00,0xC4,0x03,0x04,0x0C,0x04,0x30,0x04,
+  72          0x10,0x04,0x00,0x44,0x00,0x28,0x00,0x10};
+  73          
+  74          uchar code STAR[]={//☆[16*16]横排
+  75          0x00,0x80,0x00,0x80,0x01,0x40,0x01,0x40,
+  76          0x02,0x20,0x7C,0x1F,0x20,0x02,0x10,0x04,
+  77          0x08,0x08,0x04,0x10,0x08,0x88,0x09,0x48,
+  78          0x16,0x34,0x18,0x0C,0x20,0x02,0x00,0x00};
+  79          
+  80          uchar code robot[] = {
+  81          0x08,0x10,0x08,0x10,0x08,0x10,0x7F,0xFE,
+  82          0x20,0x04,0x12,0x48,0x08,0x10,0x05,0xA0,
+  83          0x02,0x40,0x01,0x80,0x01,0x80,0x07,0xE0,
+  84          0x09,0x90,0x11,0x88,0x11,0x88,0x11,0x88}; 
+  85          
+  86          
+  87          uchar code ting[]={
+  88          0x00,0x10,0x08,0x38,0x7D,0xC0,0x49,0x00,
+  89          0x49,0x00,0x49,0x04,0x49,0xFE,0x49,0x10,
+  90          0x49,0x10,0x49,0x10,0x49,0x10,0x4A,0x10,
+  91          0x7A,0x10,0x44,0x10,0x08,0x10,0x00,0x10};
+  92          
+  93          
+  94          unsigned char code zju[]={
+  95          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFE,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+  96          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xF8,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+  97          0xFF,0xFF,0xFF,0xFF,0xA0,0x00,0xFF,0xF0,0x00,0x7F,0x00,0x00,0x03,0xFF,0xFF,0xFF,
+  98          0xFF,0xFF,0xFF,0xC0,0x00,0x00,0x1F,0xE0,0x00,0x38,0x00,0x00,0x03,0xFF,0xFF,0xFF,
+  99          0xFF,0xFF,0xFF,0xC0,0x00,0x00,0x0F,0xE0,0x00,0x70,0x00,0x00,0x07,0xFF,0xFF,0xFF,
+ 100          0xFF,0xFF,0xFF,0xE0,0x00,0x00,0x07,0xC0,0x03,0xE0,0x00,0x00,0x07,0xFF,0xFF,0xFF,
+ 101          0xFF,0xFF,0xFF,0xF0,0x00,0x00,0x03,0xC0,0x0F,0xC0,0x00,0x00,0x1F,0xFF,0xFF,0xFF,
+ 102          0xFF,0xFF,0xFF,0xFC,0x00,0x00,0x03,0xC0,0x07,0xC0,0x00,0x00,0x3F,0xFF,0xFF,0xFF,
+ 103          0xFF,0xFF,0xFF,0xFF,0xC0,0x00,0x01,0xC0,0x07,0x80,0x00,0xFB,0xFF,0xFF,0xFF,0xFF,
+ 104          0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x01,0x80,0x03,0x80,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 105          0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x00,0x80,0x03,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 106          0xFF,0xFF,0xFF,0xFF,0xEF,0x80,0x00,0x00,0x03,0x00,0x00,0x01,0x7F,0xFF,0xFF,0xFF,
+ 107          0xFF,0xFF,0xFF,0xFE,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x7F,0xFF,0xFF,0xFF,
+ 108          0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,
+ 109          0xFF,0xFF,0xFF,0xFF,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,
+ 110          0xFF,0xFF,0xFF,0xFF,0xC0,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0xFF,0xFF,0xFF,0xFF,
+ 111          0xFF,0xFF,0xFF,0xFF,0xE0,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0xFF,0xFF,0xFF,0xFF,
+ 112          0xFF,0xFF,0xFF,0xFF,0xFC,0x60,0x00,0x00,0x00,0x00,0x04,0x1F,0xFF,0xFF,0xFF,0xFF,
+ 113          0xFF,0xFF,0xFF,0xFF,0xFF,0xF0,0x00,0x00,0x00,0x00,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 114          0xFF,0xFF,0xFF,0xFF,0xFF,0xF8,0x00,0x00,0x00,0x00,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 115          0xFF,0xFF,0xFF,0xFF,0xFF,0xF8,0x00,0x00,0x00,0x00,0x1F,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 116          0xFF,0xFF,0xFF,0xFF,0xFC,0x00,0x00,0x00,0x00,0x00,0x00,0xBF,0xFF,0xFF,0xFF,0xFF,
+ 117          0xFF,0xFF,0xFF,0xFF,0xFC,0x00,0x00,0x00,0x00,0x00,0x00,0x3F,0xFF,0xFF,0xFF,0xFF,
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 3   
+
+ 118          0xFF,0xFF,0xFF,0xFF,0xFE,0x00,0x00,0x00,0x00,0x00,0x00,0x7F,0xFF,0xFF,0xFF,0xFF,
+ 119          0xFF,0xFF,0xFF,0xFF,0xFE,0x00,0x00,0x00,0x00,0x00,0x00,0x7F,0xFF,0xFF,0xFF,0xFF,
+ 120          0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x00,0x00,0x00,0x00,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 121          0xFF,0xFF,0xFF,0xFF,0xFF,0xE0,0x00,0x00,0x00,0x00,0x4F,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 122          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 123          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 124          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 125          0xFF,0xFF,0xFF,0xFF,0xFF,0xE0,0x00,0x00,0x00,0x00,0x03,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 126          0xFF,0xFF,0xFF,0xFF,0xFF,0xF0,0x00,0x00,0x00,0x00,0x07,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 127          0xFF,0xFF,0xFF,0xFF,0xFF,0xF0,0x00,0x00,0x00,0x00,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 128          0xFF,0xFF,0xFF,0xFF,0xFF,0xF8,0x00,0x00,0x00,0x00,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 129          0xFF,0xFF,0xFF,0xFF,0xFF,0xFE,0x00,0x00,0x00,0x00,0x3F,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 130          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xE0,0x00,0x00,0x07,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 131          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xF0,0x00,0x00,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 132          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xF0,0x00,0x00,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 133          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 134          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 135          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x00,0x00,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 136          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xC0,0x00,0x00,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 137          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xE0,0x00,0x00,0x03,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 138          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFE,0x00,0x00,0x1F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 139          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 140          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 141          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 142          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 143          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 144          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFE,0x00,0x00,0x7F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 145          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFE,0x00,0x00,0x7F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 146          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 147          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 148          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x80,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 149          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xC0,0x03,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 150          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xE0,0x03,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 151          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xE0,0x07,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 152          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xF0,0x07,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 153          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xF8,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 154          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xF8,0x1F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 155          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFC,0x1F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 156          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFE,0x3F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 157          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFE,0x7F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 158          0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x7F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 159          };
+ 160          
+ 161          /*      uchar code table[] = { //占空比调整表
+ 162                          //50,50};
+ 163                          0,9,17,26,34,42,50,57,64,71,77,82,87,91,94,97,98,99,100}; */
+ 164          uchar code PWM_table[] = {
+ 165                          1 ,2, 3 ,4 ,5 ,6 ,7 ,8, 9 ,10 ,
+ 166                          11 ,12 ,13 ,14, 15, 16, 17 ,18,19 ,20,
+ 167                           21,22,23, 24 ,25 ,26 ,27, 28, 29 ,30, 
+ 168                           31 ,32 ,33 ,34 ,35 ,36 ,37 ,38, 39 ,40,
+ 169                            41 ,42 ,43, 44 ,45 ,46, 47 ,48, 49, 50 ,
+ 170                            51 ,52, 53, 54 ,55 ,56, 57, 58, 59, 60 ,
+ 171                            61, 62 ,63 ,64 ,65 ,66, 67 ,68 ,69 ,70, 
+ 172                            71 ,72 ,73,74, 75, 76 ,77 ,78, 79 ,80,
+ 173                            81 ,82,83, 84 ,85, 86 ,87, 88 ,89, 90,
+ 174                             91 ,92 ,93 ,94 ,95 ,96, 97, 98, 99, 100 }  ;
+ 175          
+ 176          unsigned char xdata recorded_songs[100]={0};
+ 177          
+ 178          
+ 179          
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 4   
+
+ 180          void main()
+ 181          {
+ 182   1              P5M1=0x00;
+ 183   1              P5M0=0x30;      
+ 184   1              P4M1=0xC0;
+ 185   1              P4M0=0x00;      
+ 186   1              P3M1=0x00;
+ 187   1              P3M0=0x00;
+ 188   1              
+ 189   1              Ini_Lcd();//液晶初始化子程序
+ 190   1              WRGDRAM(0x80,16,32,zju);
+ 191   1              clear_LCD();
+ 192   1              DLED_1=0;
+ 193   1              DLED_2=0;
+ 194   1              while(1)
+ 195   1              {       
+ 196   2                      draw_cover();   
+ 197   2                      if((ctrl_port_check()&0xF0)==0xF0) //什么也不插是全1
+ 198   2                      {       
+ 199   3                              clear_LCD();
+ 200   3                              while((ctrl_port_check()&0xF0)==0xF0)  // 放止一直刷新
+ 201   3                              {
+ 202   4                                      P4M1=0x00;
+ 203   4                                      P4M0=0x00;
+ 204   4                                      Disp(1,0,16,"浙江大学光电学院");//显示数据到LCD12864子程序                      
+ 205   4                                      Disp(2,1,12,"电子系统设计");//显示数据到LCD12864子程序
+ 206   4                                      set_CGRAM(STAR);
+ 207   4                                      Disp(3,2,8,"黄隆钤\00\00");//显示数据到LCD12864子程序
+ 208   4                                      Disp(4,2,8,"2020--08");
+ 209   4                                      set_CGRAM(jia);
+ 210   4                                      set_CGRAM(you);
+ 211   4                                      set_CGRAM(xue);
+ 212   4                                      set_CGRAM(xi);                  
+ 213   4                                      set_CGRAM(STAR);
+ 214   4                      
+ 215   4                              }
+ 216   3                              
+ 217   3                              //Delay_xMs(2500);              
+ 218   3                      }               
+ 219   2      
+ 220   2                      if(!(ctrl_port_check()&0x80)) //ctrl_port_check()==0x70 慢
+ 221   2                      { 
+ 222   3                      
+ 223   3                              KeyIO=0xF0;
+ 224   3                              clear_LCD();
+ 225   3                              Disp(1,0,16,"系统进行按键检测");//显示数据到LCD12864子程序                      
+ 226   3                              while(!(ctrl_port_check()&0x80))
+ 227   3                              {                               
+ 228   4                                      if((P1&0xf0)!=0xf0) //如果有键按下
+ 229   4                              {
+ 230   5                                  Delay_xMs(100);   //延时去抖动
+ 231   5                                  if((KeyIO&0xf0)!=0xf0)   //再判断
+ 232   5                                  {
+ 233   6                                                      key=scankey();
+ 234   6                                                      switch(key)
+ 235   6                                                      {
+ 236   7                                                              case 11:Disp(2,1,12,"KEY_VALUE:01");break;
+ 237   7                                                              case 12:Disp(2,1,12,"KEY_VALUE:02");break;
+ 238   7                                                              case 13:Disp(2,1,12,"KEY_VALUE:03");break;
+ 239   7                                                              case 14:Disp(2,1,12,"KEY_VALUE:04");break;
+ 240   7                                                              case 21:Disp(2,1,12,"KEY_VALUE:05");break;
+ 241   7                                                              case 22:Disp(2,1,12,"KEY_VALUE:06");break;
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 5   
+
+ 242   7                                                              case 23:Disp(2,1,12,"KEY_VALUE:07");break;
+ 243   7                                                              case 24:Disp(2,1,12,"KEY_VALUE:08");break;
+ 244   7                                                              case 31:Disp(2,1,12,"KEY_VALUE:09");break;      
+ 245   7                                                              case 32:Disp(2,1,12,"KEY_VALUE:10");break;
+ 246   7                                                              case 33:Disp(2,1,12,"KEY_VALUE:11");break;
+ 247   7                                                              case 34:Disp(2,1,12,"KEY_VALUE:12");break;
+ 248   7                                                              case 41:Disp(2,1,12,"KEY_VALUE:13");break;
+ 249   7                                                              case 42:Disp(2,1,12,"KEY_VALUE:14");break;
+ 250   7                                                              case 43:Disp(2,1,12,"KEY_VALUE:15");break;
+ 251   7                                                              case 44:Disp(2,1,12,"KEY_VALUE:16");break;
+ 252   7                                                      }
+ 253   6                                              }   
+ 254   5                                      }
+ 255   4                              }
+ 256   3                      }
+ 257   2                      else if(!(ctrl_port_check()&0x40))
+ 258   2                      { 
+ 259   3                              clear_LCD();
+ 260   3                              while(!(ctrl_port_check()&0x40))
+ 261   3                              {
+ 262   4                                      Disp(1,2,8,"音乐播放测试");
+ 263   4                                      Disp(2,1,12,"(4,1):Lemon~");
+ 264   4                                      Play_Song(3);
+ 265   4      
+ 266   4                              }
+ 267   3                              //timer0_init();
+ 268   3      
+ 269   3                              //Play_Song(0);                  
+ 270   3                      } 
+ 271   2      
+ 272   2      
+ 273   2                      else if(!(ctrl_port_check()&0x20))
+ 274   2                      { 
+ 275   3                               clear_LCD();
+ 276   3                               Disp(1,0,16,"系统进行光耦检测");
+ 277   3                               OPT_CHECK = 0xFF;
+ 278   3                               note=note_0;
+ 279   3                               while((!(ctrl_port_check()&0x20))&&((OPT_CHECK&0x7F) != 0x7F))
+ 280   3                               {
+ 281   4                                      if(OPT_CHECK&0x01)
+ 282   4                                       {
+ 283   5                                         ShowQQChar(0x90,"1:高",2);
+ 284   5                                       }
+ 285   4                                       else
+ 286   4                                       {
+ 287   5                                         ShowQQChar(0x90,"1:低",2);
+ 288   5                                       }
+ 289   4                                       if(OPT_CHECK&0x02)
+ 290   4                                       {
+ 291   5                                         ShowQQChar(0x92,"2:高",2);
+ 292   5                                       }
+ 293   4                                       else
+ 294   4                                       {
+ 295   5                                         ShowQQChar(0x92,"2:低",2);
+ 296   5                                       }
+ 297   4                                       if(OPT_CHECK&0x04)
+ 298   4                                       {
+ 299   5                                         ShowQQChar(0x94,"3:高",2);
+ 300   5                                       }
+ 301   4                                       else
+ 302   4                                       {
+ 303   5                                         ShowQQChar(0x94,"3:低",2);
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 6   
+
+ 304   5                                       }
+ 305   4                                       if(OPT_CHECK&0x08)
+ 306   4                                       {
+ 307   5                                         ShowQQChar(0x96,"4:高",2);
+ 308   5                                       }
+ 309   4                                       else
+ 310   4                                       {
+ 311   5                                         ShowQQChar(0x96,"4:低",2);
+ 312   5                                       }
+ 313   4                                       if(OPT_CHECK&0x10)
+ 314   4                                       {
+ 315   5                                         ShowQQChar(0x88,"5:高",2);
+ 316   5                                       }
+ 317   4                                       else
+ 318   4                                       {
+ 319   5                                         ShowQQChar(0x88,"5:低",2);
+ 320   5                                       }
+ 321   4                                       if(OPT_CHECK&0x20)
+ 322   4                                       {
+ 323   5                                         ShowQQChar(0x8A,"6:高",2);
+ 324   5                                       }
+ 325   4                                       else
+ 326   4                                       {
+ 327   5                                         ShowQQChar(0x8A,"6:低",2);
+ 328   5                                       }
+ 329   4                                       if(OPT_CHECK&0x40)
+ 330   4                                       {
+ 331   5                                         ShowQQChar(0x8C,"7:高  ",3);
+ 332   5                                       }
+ 333   4                                       else
+ 334   4                                       {
+ 335   5                                         ShowQQChar(0x8C,"7:低  ",3);
+ 336   5                                       }      
+ 337   4                              
+ 338   4                              }
+ 339   3                      }
+ 340   2      
+ 341   2                      else if(!(ctrl_port_check()&0x10))
+ 342   2                      {
+ 343   3      
+ 344   3                              uchar listen_page=1;
+ 345   3                              KeyIO=0xF0;
+ 346   3                              draw_cover();
+ 347   3                              back_flag=0;
+ 348   3                              while(!(ctrl_port_check()&0x10))
+ 349   3                              {       
+ 350   4                                      if((P1&0xf0)!=0xf0) //如果有键按下
+ 351   4                              {
+ 352   5                                 // Delay_xMs(100);   //延时去抖动
+ 353   5                                 // if((KeyIO&0xf0)!=0xf0)   //再判断
+ 354   5                                  //{
+ 355   5                                                      key=scankey();
+ 356   5                                                      switch(key)
+ 357   5                                                      {
+ 358   6                                                              case 11:
+ 359   6                                                              {
+ 360   7                                                                       clear_LCD();
+ 361   7                                                                       OPT_CHECK = 0xFF;
+ 362   7                                                                       note=note_m;
+ 363   7                                                                       timer1_init();
+ 364   7                                                                       if(cover_page==1)play();
+ 365   7                                                                       else if(cover_page==2)record();
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 7   
+
+ 366   7                                                                      break;
+ 367   7                                                              }
+ 368   6      
+ 369   6                                                              case 12:
+ 370   6                                                              {
+ 371   7                                                                      
+ 372   7                                                                      if(cover_page==1)
+ 373   7                                                                      {
+ 374   8                                                                              bit tmp_flag=1;
+ 375   8                                                                              draw_listen_p1();
+ 376   8                                                                              while(tmp_flag)
+ 377   8                                                                              {
+ 378   9                                                                                      uchar key1=scankey();
+ 379   9                                                                              
+ 380   9                                                                                      switch(key1)
+ 381   9                                                                                      {
+ 382  10                                                                                              case 11: 
+ 383  10                                                                                              {
+ 384  11                                                                                                      Play_Song(1);
+ 385  11                                                                                                      break;
+ 386  11                                                                                              }
+ 387  10                                                                                              
+ 388  10                                                                                              case 14: //下一页 
+ 389  10                                                                                              {       
+ 390  11                                                                                                      bit tmp_flag2=1;
+ 391  11                                                                                                      draw_listen_p2();
+ 392  11                                                                                                      
+ 393  11                                                                                                      while(tmp_flag2)
+ 394  11                                                                                                      {
+ 395  12                                                                                                              uchar key2=scankey();                                                           
+ 396  12                                                                                                              switch(key2)
+ 397  12                                                                                                              {
+ 398  13                                                                                                                      case 11: Play_Song(2);break;
+ 399  13                                                                                                                      case 12: Play_Song(3);break;
+ 400  13                                                                                                                      case 44: {tmp_flag2=0;break;}
+ 401  13                                                                                                              }
+ 402  12                                                                                                      }
+ 403  11                                                                                                      
+ 404  11                                                                                                      break;
+ 405  11                                                                                               }
+ 406  10                                                                                              
+ 407  10                                                                                              case 44: {tmp_flag=0;break;}
+ 408  10      
+ 409  10                                                                                      }
+ 410   9      
+ 411   9                                                                              }
+ 412   8                                                                       }
+ 413   7                                                                                                                                                                                      
+ 414   7                                                                      else if(cover_page==2)
+ 415   7                                                                      {
+ 416   8                                                                              draw_record_p2();
+ 417   8                                                                              DLED_1=1;
+ 418   8                                                                              DLED_2=1;
+ 419   8                                                                              delay_ms(3);
+ 420   8                                                                              Play_Song(0);
+ 421   8                                                                      } 
+ 422   7                                                                      
+ 423   7                                                                      break;
+ 424   7                                                              
+ 425   7                                                              }
+ 426   6                                                              case 13:
+ 427   6                                                              {
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 8   
+
+ 428   7                                                                      if(cover_page==1)
+ 429   7                                                                      {
+ 430   8                                                                              cover_page=2;
+ 431   8                                                                              draw_cover_p2();
+ 432   8                                                                      }
+ 433   7                                                                      
+ 434   7                                                                      else if(cover_page==2)
+ 435   7                                                                      {
+ 436   8                                                                              clear_LCD();
+ 437   8                                                                              Disp(1,0,10,"小星星练习");
+ 438   8                                                                              Disp(2,0,11,"(1,3):Start");
+ 439   8                                                                              Disp(3,0,9,"(2,3):End");
+ 440   8                                                                              Disp(4,0,13,"(4,3):Restart");
+ 441   8                                                                              practice();
+ 442   8                                                                              draw_cover_p2();
+ 443   8      
+ 444   8                                                                      }                                                               
+ 445   7                                                                      break;
+ 446   7                                                                      
+ 447   7                                                                      
+ 448   7                                                              }
+ 449   6                                                      
+ 450   6                                                              case 44:
+ 451   6                                                              {
+ 452   7                                                                      cover_page=1;
+ 453   7                                                                      listen_page=1;
+ 454   7                                                                      draw_cover();
+ 455   7                                                                      break;
+ 456   7                                                              }
+ 457   6      
+ 458   6                                                              
+ 459   6                                                      }
+ 460   5      
+ 461   5                                      }
+ 462   4                         }
+ 463   3                      }
+ 464   2      
+ 465   2              }
+ 466   1      }
+ 467          
+ 468          
+ 469          //占空比调整函数，频率不变只调整占空比
+ 470          /*
+ 471          void AdjustDutyCycle(unsigned char dc)
+ 472          {
+ 473                  unsigned int high, low;
+ 474                  high = (PeriodCnt*dc) / 100; //计算高电平所需的计数值
+ 475                  low = PeriodCnt - high; //计算低电平所需的计数值
+ 476                  high = 65536 - high ; //计算高电平的定时器重载值
+ 477                  low = 65536 - low ; //计算低电平的定时器重载值
+ 478                  HighRH = (unsigned char)(high>>8); //高电平重载值拆分为高低字节
+ 479                  HighRL = (unsigned char)high;
+ 480                  LowRH = (unsigned char)(low>>8); //低电平重载值拆分为高低字节
+ 481                  LowRL = (unsigned char)low;
+ 482          }
+ 483          */
+ 484          void timer0_isr() interrupt 1  
+ 485          {       
+ 486   1              
+ 487   1              TR0=0;
+ 488   1              timer_cnt++;
+ 489   1              if(timer_cnt==5000)stop_flag=1;
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 9   
+
+ 490   1      /*      //DLED_2=~DLED_2;
+ 491   1              tune_cnt++;
+ 492   1              if(tune_tag==0)
+ 493   1              {
+ 494   1                      if(tune_cnt==beat)
+ 495   1                      {
+ 496   1                              tune_cnt==0;
+ 497   1                              continue_flag=0;
+ 498   1                              
+ 499   1                      }
+ 500   1              }*/ 
+ 501   1      }
+ 502          
+ 503          void timer1_isr() interrupt 3
+ 504          {
+ 505   1              //TL1=low_note;
+ 506   1              //TH1=hi_note;
+ 507   1              bee_Speak=~bee_Speak;
+ 508   1              bee_cnt++;
+ 509   1              //PWMOUT=~PWMOUT;
+ 510   1              /*
+ 511   1              dc=PWM_table[index];    
+ 512   1              high = (PeriodCnt*dc) / 100; //计算高电平所需的计数值
+ 513   1              low = PeriodCnt - high; //计算低电平所需的计数值
+ 514   1              high = 65536 - high ; //计算高电平的定时器重载值
+ 515   1              low = 65536 - low ; //计算低电平的定时器重载值
+ 516   1              
+ 517   1              //AdjustDutyCycle(pwm_table[index]); //调整 PWM 的占空比
+ 518   1              if (!dir){ //逐步增大占空比     
+ 519   1                      index++;        
+ 520   1                      if (index >=99){        
+ 521   1                              dir = 1;}       
+ 522   1              }
+ 523   1              else{ //逐步减小占空比  
+ 524   1                      index--;        
+ 525   1                      if (index == 0){        
+ 526   1                              dir = 0;}
+ 527   1              }
+ 528   1              if (PWMOUT)
+ 529   1              { //当前输出为高电平时，装载低电平值并输出低电平        
+ 530   1      
+ 531   1                      TH1 = (unsigned char)(low>>8);          
+ 532   1                      TH1 = (unsigned char)low;
+ 533   1                      PWMOUT=0;
+ 534   1                      bee_Speak=0;
+ 535   1                                              
+ 536   1              }
+ 537   1              else
+ 538   1              { //当前输出为低电平时，装载高电平值并输出高电平
+ 539   1                      
+ 540   1                      TH1 = (unsigned char)(high>>8);                 
+ 541   1                      TL1 = (unsigned char)high;
+ 542   1                      PWMOUT=1;       
+ 543   1                      bee_Speak=1;
+ 544   1                              
+ 545   1              }  */
+ 546   1        
+ 547   1                      
+ 548   1      /*
+ 549   1                      
+ 550   1                      if(bee_cnt<=dc_threshold)
+ 551   1                      {
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 10  
+
+ 552   1                              DLED_1=1;
+ 553   1                              bee_Speak=1;
+ 554   1                      }
+ 555   1                      else if(bee_cnt==10)
+ 556   1                      {
+ 557   1                              bee_cnt=0;
+ 558   1      
+ 559   1                      }
+ 560   1                      else{
+ 561   1                              DLED_1=0;
+ 562   1                              bee_Speak=0;
+ 563   1                      }
+ 564   1                      */
+ 565   1      
+ 566   1                      /*
+ 567   1                      if(dc<=dc_threshold)
+ 568   1                      {
+ 569   1                              bee_Speak=1;
+ 570   1                              dc++;
+ 571   1                      }
+ 572   1                      else
+ 573   1                      {
+ 574   1                              bee_Speak=0;
+ 575   1                              dc++;                   
+ 576   1                      }
+ 577   1                      
+ 578   1                      if(dc==100)
+ 579   1                      {
+ 580   1      
+ 581   1                              dc=0;
+ 582   1                              if(dc_threshold<100)
+ 583   1                              {
+ 584   1                                      dc_threshold+=20;
+ 585   1                              }
+ 586   1                              else
+ 587   1                              {
+ 588   1                                      dc_threshold-=20;
+ 589   1                              }
+ 590   1                      }               */
+ 591   1                      
+ 592   1      }
+ 593          
+ 594          
+ 595          
+ 596          
+ 597          // 配置并启动 PWM，fr-频率，dc-占空比 
+ 598          void ConfigPWM(unsigned int iT, unsigned char dc)
+ 599          {
+ 600   1              //PeriodCnt = (12000000/12) / fr; //计算一个周期所需的计数值
+ 601   1              PeriodCnt=65536-iT;
+ 602   1              high = (PeriodCnt*dc) / 100; //计算高电平所需的计数值
+ 603   1              low = PeriodCnt - high; //计算低电平所需的计数值
+ 604   1              high = 65536 - high ; //计算高电平的定时器重载值
+ 605   1              low = 65536 - low ; //计算低电平的定时器重载值
+ 606   1              HighRH = (unsigned char)(high>>8); //高电平重载值拆分为高低字节
+ 607   1              HighRL = (unsigned char)high;
+ 608   1              LowRH = (unsigned char)(low>>8); //低电平重载值拆分为高低字节
+ 609   1              LowRL = (unsigned char)low;
+ 610   1      
+ 611   1              TH1 = HighRH; //加载 T1 重载值
+ 612   1              TL1 = HighRL;
+ 613   1              PWMOUT = 1; //输出高电平
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 11  
+
+ 614   1              bee_Speak=0;
+ 615   1              TR1=1;
+ 616   1              //if(bee_flag)bee_Speak=1;
+ 617   1      }
+ 618          
+ 619          
+ 620          
+ 621          
+ 622          /*******************定时器初始化********************/
+ 623          void timer0_init() //1ms定时
+ 624          {
+ 625   1      
+ 626   1              TMOD |=0x01;            //设置定时器模式
+ 627   1      
+ 628   1              TL0 = (65536-1000)/256;         //设置定时初值
+ 629   1              TH0 = (65536-1000)%256;         //设置定时初值
+ 630   1              ET0=1;
+ 631   1              EA=1;
+ 632   1              TR0 = 0;                
+ 633   1              timer_cnt=0;
+ 634   1      }
+ 635          
+ 636          void timer1_init()
+ 637          {
+ 638   1              TR1=0;
+ 639   1              TMOD |=0x01; //B0001_0000?
+ 640   1              ET1=1;
+ 641   1              EA=1;
+ 642   1              DLED_1=0 ;
+ 643   1              DLED_2=0;
+ 644   1      }
+ 645          /****************播放音乐*************************/
+ 646          void s1_s2_check(void)
+ 647          {
+ 648   1              if(P4&0x40) 
+ 649   1                      DLED_1 =1;
+ 650   1              else    
+ 651   1                      DLED_1 =0;
+ 652   1              
+ 653   1              if((P4&0x80)) 
+ 654   1                      DLED_2 =1;
+ 655   1              else    
+ 656   1                      DLED_2 =0;
+ 657   1              }
+ 658          
+ 659          /****************播放音乐*************************/
+ 660          void Play_Song(unsigned char song_idx)
+ 661          {
+ 662   1              uchar * song;
+ 663   1              uchar* song_name;
+ 664   1              uchar name_len;
+ 665   1              uchar clear_flag=1;     // 只进行一次清屏
+ 666   1              uchar note_idx,i=0,key_tmp;     
+ 667   1              timer1_init();
+ 668   1      //      timer0_init();
+ 669   1              song_flag=1;
+ 670   1      
+ 671   1              switch(song_idx)
+ 672   1              {
+ 673   2                      case 0: // unsigned -1不行!
+ 674   2                      {
+ 675   3                              song=recorded_songs;
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 12  
+
+ 676   3                              song_name="recorded_song";
+ 677   3                              name_len=14;
+ 678   3                              break;//忘记break了，导致一致doremi
+ 679   3                      }
+ 680   2                      case 1: 
+ 681   2                      {       song=doremi;                    
+ 682   3                              song_name="DoReMi";
+ 683   3                              name_len=6;
+ 684   3                              break;
+ 685   3                      }
+ 686   2                      case 2: {song=little_star; song_name="小星星"; name_len=6;  break;}
+ 687   2                      case 3: {song=lemon; song_name="Lemon"; name_len=5;  break;}
+ 688   2              }
+ 689   1              draw_songname(song_name,name_len);
+ 690   1              delay_ms(5);
+ 691   1              clear_LCD();
+ 692   1              while(song_flag)
+ 693   1              {
+ 694   2                      KeyIO=0xf0;
+ 695   2                      if((KeyIO&0xf0)!=0xf0) 
+ 696   2                      {
+ 697   3                               key_tmp=scankey();
+ 698   3                      }
+ 699   2      
+ 700   2                      if(key_tmp==14)
+ 701   2                      {
+ 702   3                              uchar key_tmp2=0;
+ 703   3                              KeyIO=0xf0;
+ 704   3                              TR1=0;
+ 705   3                              bee_Speak=0;
+ 706   3                      
+ 707   3                              while(1)
+ 708   3                              {
+ 709   4                                      
+ 710   4                                      Disp(4,0,16,"已中止,(2,4)接着");
+ 711   4                                      DLED_1=1;
+ 712   4                                      DLED_2=1;
+ 713   4                                      if((KeyIO&0xf0)!=0xf0) 
+ 714   4                                      {
+ 715   5                                              key_tmp2=scankey();
+ 716   5                                              if(key_tmp2==24)
+ 717   5                                              {
+ 718   6                                                      draw_songname(song_name,name_len);
+ 719   6                                                      break;
+ 720   6                                              }
+ 721   5                                              if(key_tmp2==44)
+ 722   5                                              {
+ 723   6                                                      song_flag=0;
+ 724   6                                                      draw_listen_p1();
+ 725   6                                                      break;
+ 726   6                                              }
+ 727   5                                      }
+ 728   4                                      
+ 729   4                              }
+ 730   3                              TR1=1;
+ 731   3                              bee_Speak=1;
+ 732   3                      }
+ 733   2                      else if(key_tmp==44){KeyIO=0xf0;song_flag=0;break;}
+ 734   2                              
+ 735   2                      note_idx=song[i];
+ 736   2                      beat_idx=song[i+1];       
+ 737   2                      tie_flag=song[i+2];       //  是否与下一个连音
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 13  
+
+ 738   2                      
+ 739   2                      draw_notes(note_idx,beat_idx,tie_flag,clear_flag);              
+ 740   2                      clear_flag=0;
+ 741   2                      if(note_idx==0)
+ 742   2                      {       
+ 743   3                              TR1=0;
+ 744   3                              song_flag=0;
+ 745   3                              break;
+ 746   3                      }
+ 747   2                      
+ 748   2                      if(!tie_flag&&i>1)//i==3,note_idx=song[2]
+ 749   2                      {
+ 750   3                              if(note_idx==song[i-3])
+ 751   3                              {
+ 752   4                                      TR1=0;
+ 753   4                                      bee_Speak=0;
+ 754   4                                      DLED_1=1;
+ 755   4                                      DLED_2=1;
+ 756   4                                      delay_us(100);
+ 757   4                                      TR1=1;
+ 758   4                              }
+ 759   3      
+ 760   3                      }
+ 761   2                
+ 762   2                      TH1=(notes[note_idx]>>8);
+ 763   2                      TL1=(notes[note_idx]&0x00FF);
+ 764   2                      TR1=1;
+ 765   2      
+ 766   2                      delay_ms(beats[beat_idx]) ; 
+ 767   2                      i+=3;
+ 768   2              }
+ 769   1              TR1=0;
+ 770   1      
+ 771   1      
+ 772   1      
+ 773   1      
+ 774   1      }
+ 775          
+ 776          /*****************检测控制端口的状态*****************/
+ 777          uchar ctrl_port_check(void)
+ 778          {
+ 779   1              SW_CTRL = 0xFF;
+ 780   1              return  SW_CTRL&0xF0;
+ 781   1      }
+ 782          
+ 783          
+ 784          uchar scankey(void)//矩阵键盘翻转扫描
+ 785          {
+ 786   1              uint keyvalue=0;
+ 787   1              uchar temp1,temp2,keycode;
+ 788   1      
+ 789   1              KeyIO=0xf0;             //行置0列置1
+ 790   1              temp1=KeyIO&0xf0;
+ 791   1              if((temp1&0xf0)==0xf0) return(0);  //若无键按下返回0
+ 792   1              KeyIO=0x0f;
+ 793   1              temp2=KeyIO&0x0f;                                          //若有键按下，行置1列置0
+ 794   1              keycode=~(temp1|temp2);                    //获得键盘码
+ 795   1              switch(keycode)                                    //根据键盘码返回键值
+ 796   1              {
+ 797   2                      case 0x11:return(11);break;
+ 798   2                      case 0x21:return(12);break;
+ 799   2                      case 0x41:return(13);break;
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 14  
+
+ 800   2                      case 0x81:return(14);break;
+ 801   2                      case 0x12:return(21);break;
+ 802   2                      case 0x22:return(22);break;
+ 803   2                      case 0x42:return(23);break;
+ 804   2                      case 0x82:return(24);break;
+ 805   2                      case 0x14:return(31);break;
+ 806   2                      case 0x24:return(32);break;
+ 807   2                      case 0x44:return(33);break;
+ 808   2                      case 0x84:return(34);break;
+ 809   2                      case 0x18:return(41);break;
+ 810   2                      case 0x28:return(42);break;
+ 811   2                      case 0x48:return(43);break;
+ 812   2                      case 0x88:return(44);break;
+ 813   2                      default:  return(0);break;
+ 814   2              }
+ 815   1              return(0);
+ 816   1      }
+ 817                   
+ 818          /****************延迟毫秒数************************/
+ 819          void Delay_xMs(unsigned int x)
+ 820          {
+ 821   1          unsigned int i,j;
+ 822   1          for( i =0;i < x;i++ )
+ 823   1          {
+ 824   2              for( j =0;j<2;j++ );
+ 825   2          }
+ 826   1      }
+ 827          
+ 828          // 微秒级
+ 829          void delay_us(unsigned int x)
+ 830          {
+ 831   1              unsigned char t=11;
+ 832   1              unsigned int i; // 255不够用！
+ 833   1              for(i=0;i<x;i++)
+ 834   1              {
+ 835   2                      while(t--);
+ 836   2              }
+ 837   1              
+ 838   1      }
+ 839          
+ 840          // 毫秒级
+ 841          void delay_ms(unsigned int x)
+ 842          {
+ 843   1              unsigned int t=11,i;
+ 844   1              for(i=0;i<x;i++)
+ 845   1              {
+ 846   2                      delay_us(550);
+ 847   2              }
+ 848   1              
+ 849   1      }
+ 850          
+ 851          
+ 852          // LCD界面绘制函数
+ 853          void draw_songname(unsigned char* song_name,unsigned char len)
+ 854          {       
+ 855   1              Disp(1,0,10,"Playing---");
+ 856   1              Disp(2,0,len,song_name);
+ 857   1              
+ 858   1      }
+ 859          
+ 860          void draw_notes(unsigned char note_idx,unsigned char beat_idx,bit tie_flag,bit clear_flag)
+ 861          {
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 15  
+
+ 862   1               unsigned char * str;
+ 863   1               static unsigned char loc=0;
+ 864   1               static unsigned char col=2;
+ 865   1               if(clear_flag==1){clear_LCD();loc=0;col=2;}
+ 866   1               if(loc>7){
+ 867   2                      loc=0;
+ 868   2                      col++;
+ 869   2                      if(col>4)col=2;
+ 870   2               }
+ 871   1      
+ 872   1               if(note_idx==0)str="0";
+ 873   1               else{
+ 874   2                      switch (note_idx%7)
+ 875   2                      {
+ 876   3                              case 1: {
+ 877   4                                      if(note_idx>7&&note_idx<14)str="1M";
+ 878   4                                      else if(note_idx<7)str="1L";
+ 879   4                                      else str="1H";
+ 880   4                                      //WRCGRAM1(0x80);
+ 881   4                                      break;
+ 882   4                              }
+ 883   3              
+ 884   3                              case 2:
+ 885   3                              {
+ 886   4                                      if(note_idx>7&&note_idx<14)str="1M";
+ 887   4                                      else if(note_idx<7)str="1L";
+ 888   4                                      else str="1H";
+ 889   4                                      break;
+ 890   4                              }
+ 891   3                              case 3:
+ 892   3                              {
+ 893   4                                      if(note_idx>7&&note_idx<14)str="3M";
+ 894   4                                      else if(note_idx<7)str="3L";
+ 895   4                                      else str="3H";
+ 896   4                                      break;
+ 897   4                              }
+ 898   3                              case 4:
+ 899   3                              {
+ 900   4                                      if(note_idx>7&&note_idx<14)str="4M";
+ 901   4                                      else if(note_idx<7)str="4L";
+ 902   4                                      else str="4H";
+ 903   4                                      break;
+ 904   4                              }
+ 905   3                              case 5:
+ 906   3                              {
+ 907   4                                      if(note_idx>7&&note_idx<14)str="5M";
+ 908   4                                      else if(note_idx<7)str="5L";
+ 909   4                                      else str="5H";
+ 910   4                                      break;
+ 911   4                              }
+ 912   3                              case 6:
+ 913   3                              {
+ 914   4                                      if(note_idx>7&&note_idx<14)str="6M";
+ 915   4                                      else if(note_idx<7)str="6L";
+ 916   4                                      else str="6H";
+ 917   4                                      break;
+ 918   4                              }
+ 919   3                              case 0:
+ 920   3                              {
+ 921   4                                      if(note_idx==14)str="7M";
+ 922   4                                      else if(note_idx==7)str="7L";
+ 923   4                                      else str="7H";
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 16  
+
+ 924   4                                      break;
+ 925   4                              }
+ 926   3                      }
+ 927   2               }
+ 928   1                       
+ 929   1               Disp(1,0,10,"Song-Notes");
+ 930   1               Disp(col,loc,2,str);
+ 931   1               loc++;
+ 932   1      }
+*** WARNING C280 IN LINE 860 OF MAIN.C: 'beat_idx': unreferenced local variable
+*** WARNING C280 IN LINE 860 OF MAIN.C: 'tie_flag': unreferenced local variable
+ 933          
+ 934          void draw_listen_p1()
+ 935          {
+ 936   1              clear_LCD();
+ 937   1              Disp(1,0,10,"请选择曲目:");
+ 938   1              Disp(2,0,10,"(4,4):返回");
+ 939   1              Disp(3,0,12,"(1,1):DoReMi");
+ 940   1              Disp(4,0,12,"(1,4):下一页");
+ 941   1      }
+ 942          
+ 943          
+ 944          void draw_listen_p2()
+ 945          {
+ 946   1              clear_LCD();
+ 947   1              Disp(1,0,12,"(1,1):小星星");
+ 948   1              Disp(2,0,12,"(1,2):Lemon");
+ 949   1              Disp(3,0,10,"(4,4):返回");
+ 950   1      
+ 951   1      }
+ 952          
+ 953          void draw_cover()
+ 954          {
+ 955   1              clear_LCD();
+ 956   1              Disp(1,0,16,"欢迎使用无弦琴!");
+ 957   1              Disp(2,1,12,"按(1,1):弹奏");
+ 958   1              Disp(3,1,12,"按(1,2):歌曲");
+ 959   1              Disp(4,1,14,"按(1,3):下一页");
+ 960   1      }
+ 961          
+ 962          void draw_cover_p2()
+ 963          {
+ 964   1              clear_LCD();
+ 965   1              Disp(1,0,12,"按(1,1):录音");
+ 966   1              Disp(2,0,16,"按(1,2):播放录音");
+ 967   1              Disp(3,0,16,"按(1,3):节奏大师");
+ 968   1              Disp(4,0,14,"按(4,4):上一页");
+ 969   1      }
+ 970          
+ 971          void draw_record_p2()
+ 972          {
+ 973   1               clear_LCD();
+ 974   1               Disp(1,0,10,"播放录音--");
+ 975   1               Disp(2,0,14,"Recorded-Songs");
+ 976   1      }
+ 977          
+ 978          
+ 979          
+ 980          
+ 981          
+ 982          // 弹奏模块
+ 983          void play()
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 17  
+
+ 984          {
+ 985   1               bit tmp_flag=1;
+ 986   1               clear_LCD();
+ 987   1               Disp(1,0,8,"准备弹奏");
+ 988   1               Disp(2,0,15,"(1,4)-L,(2,4)-M");
+ 989   1               Disp(3,0,16,"(3,4)-H,(4,4)-Bk");
+ 990   1               delay_ms(5);
+ 991   1               clear_LCD();
+ 992   1               Disp(1,0,8,"Playing-");
+ 993   1               while(tmp_flag&&(OPT_CHECK&0x7F) != 0x7F)
+ 994   1               {
+ 995   2                       if((KeyIO&0xf0)!=0xf0) 
+ 996   2                       {                                                                              
+ 997   3                              uchar key1=scankey();                                                           
+ 998   3                              switch(key1)
+ 999   3                              {
+1000   4                                      case 14: {note=note_l;tune_tag=0;break;}
+1001   4                                      case 24: {note=note_m;tune_tag=1;break;}
+1002   4                                      case 34: {note=note_h;tune_tag=2;break;}
+1003   4                                      case 44: {tmp_flag=0;bee_Speak=0;TR1=0;tune_tag=1;break;}
+1004   4      
+1005   4                               }
+1006   3                       }
+1007   2                       
+1008   2                       if(OPT_CHECK&0x01)
+1009   2                              {
+1010   3                                 if(bee_cnt>250)
+1011   3                                 {
+1012   4                                      draw_notes(1+tune_tag*7,1,0,0); 
+1013   4                              /*      if(bee_cnt>500)
+1014   4                                      {
+1015   4                                              if(idx>1&&recorded_songs[idx-3]==1+tune_tag*7)
+1016   4                                              {
+1017   4                                                      recorded_songs[idx+2]=1; //连音
+1018   4                                              }
+1019   4                                      } */
+1020   4                                      bee_cnt=0;
+1021   4                                      DLED_1=~DLED_1;
+1022   4                                      }
+1023   3                                
+1024   3                                 TH1=note[0]>>8;
+1025   3                                 TL1=note[0]&0x00FF;
+1026   3                                 //ConfigPWM(note[0],0);
+1027   3                                 //while(OPT_CHECK&0x01);
+1028   3                                 TR1=1;
+1029   3                                 //timer_cnt=0;
+1030   3                               }
+1031   2                      
+1032   2                               else if(OPT_CHECK&0x02)
+1033   2                               {
+1034   3                                 if(bee_cnt>210)
+1035   3                                 {
+1036   4                                      draw_notes(2+tune_tag*7,1,0,0); 
+1037   4                                      DLED_1=~DLED_1;
+1038   4                                      bee_cnt=0;
+1039   4                                 }
+1040   3              
+1041   3                                 TH1=note[1]>>8;
+1042   3                                 TL1=note[1]&0x00FF;
+1043   3                                 //ConfigPWM(note[1],0);
+1044   3                                 //while(OPT_CHECK&0x02);
+1045   3                                 TR1=1;
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 18  
+
+1046   3                                 //timer_cnt=0;
+1047   3                               }
+1048   2                              
+1049   2                               else if(OPT_CHECK&0x04)
+1050   2                               {
+1051   3                                 if(bee_cnt>200)
+1052   3                                 {
+1053   4                                      draw_notes(3+tune_tag*7,1,0,0); 
+1054   4                                      DLED_1=~DLED_1;
+1055   4                                      bee_cnt=0;
+1056   4                                 }
+1057   3              
+1058   3                                 TH1=note[2]>>8;
+1059   3                                 TL1=note[2]&0x00FF;
+1060   3                                 //ConfigPWM(note[2],0);
+1061   3                                 //while(OPT_CHECK&0x04);
+1062   3                                 TR1=1;
+1063   3                                // timer_cnt=0;
+1064   3                                 
+1065   3                               }
+1066   2                               
+1067   2                               else if(OPT_CHECK&0x08)
+1068   2                               {
+1069   3                                 if(bee_cnt>200)
+1070   3                                 {
+1071   4                                      draw_notes(4+tune_tag*7,1,0,0); 
+1072   4                                      DLED_1=~DLED_1;
+1073   4                                      bee_cnt=0;
+1074   4                                 }
+1075   3              
+1076   3                                 TH1=note[3]>>8;
+1077   3                                 TL1=note[3]&0x00FF;
+1078   3                                 //ConfigPWM(note[3],0);
+1079   3                                 //while(OPT_CHECK&0x08);
+1080   3                                 TR1=1;
+1081   3                                // timer_cnt=0;
+1082   3                               }
+1083   2                               
+1084   2                               else if(OPT_CHECK&0x10)
+1085   2                               {
+1086   3                                 if(bee_cnt>250)
+1087   3                                 {
+1088   4                                      draw_notes(5+tune_tag*7,1,0,0); 
+1089   4                                      DLED_1=~DLED_1;
+1090   4                                      bee_cnt=0;
+1091   4                                      }
+1092   3              
+1093   3                                 TH1=note[4]>>8;
+1094   3                                 TL1=note[4]&0x00FF;
+1095   3                                 //ConfigPWM(note[4],0);
+1096   3                                 //while(OPT_CHECK&0x10);
+1097   3                                 TR1=1;
+1098   3                                // timer_cnt=0;
+1099   3                               }
+1100   2                               
+1101   2                               else if(OPT_CHECK&0x20)
+1102   2                               {
+1103   3                                 if(bee_cnt>200)
+1104   3                                 {
+1105   4                                      draw_notes(6+tune_tag*7,1,0,0); 
+1106   4                                      bee_cnt=0;
+1107   4                                      DLED_1=~DLED_1;
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 19  
+
+1108   4                                }
+1109   3              
+1110   3                                 TH1=note[5]>>8;
+1111   3                                 TL1=note[5]&0x00FF;
+1112   3                                 //ConfigPWM(note[5],0);
+1113   3                                 //while(OPT_CHECK&0x20);
+1114   3                                 TR1=1;
+1115   3                                // timer_cnt=0;
+1116   3                               }
+1117   2                               
+1118   2                               else if(OPT_CHECK&0x40)
+1119   2                               {
+1120   3                                 if(bee_cnt>200)
+1121   3                                      {
+1122   4                                              draw_notes(7+tune_tag*7,1,0,0); 
+1123   4                                              DLED_1=~DLED_1;
+1124   4                                              bee_cnt=0;
+1125   4                                              //bee_Speak=0;
+1126   4                                      }
+1127   3              
+1128   3                                 TH1=note[6]>>8;
+1129   3                                 TL1=note[6]&0x00FF;
+1130   3                                 /*ConfigPWM(note[6],0);
+1131   3                                 while(OPT_CHECK&0x40);
+1132   3                                 TR1=0;*/
+1133   3                                 TR1=1;
+1134   3                                // timer_cnt=0;
+1135   3                               }
+1136   2                       
+1137   2      
+1138   2                       else
+1139   2                       {
+1140   3                         //draw_notes(0,1,0,0);
+1141   3                         TR1=0;
+1142   3                         bee_Speak=0;
+1143   3                       }                               
+1144   2      
+1145   2                      
+1146   2              }
+1147   1      }
+1148          
+1149          
+1150          // 录音函数
+1151          
+1152          void recording(unsigned char tune_tag,unsigned char note_idx,unsigned char idx)
+1153          {
+1154   1      
+1155   1              recorded_songs[idx]=note_idx+tune_tag*7;
+1156   1      
+1157   1              recorded_songs[idx+1]=1; // 可改进
+1158   1              recorded_songs[idx+2]=0; // 可改进      
+1159   1      
+1160   1      
+1161   1      }
+1162          
+1163          
+1164          // 录音模块
+1165          void record()
+1166          {
+1167   1              unsigned char idx=0;
+1168   1               bit stop=0;
+1169   1               bit start=0;
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 20  
+
+1170   1               Disp(1,0,10,"准备录音--");     
+1171   1               Disp(2,0,11,"(1,3):Start");
+1172   1               Disp(3,0,9,"(2,3):End");
+1173   1               Disp(4,0,13,"(4,3):Restart");
+1174   1                                                               
+1175   1               while(!stop)
+1176   1               {
+1177   2                      uchar key1=scankey();
+1178   2                      switch(key1)
+1179   2                      {
+1180   3                      
+1181   3                              case 13:
+1182   3                              {
+1183   4                                      if(start==0)
+1184   4                                      {
+1185   5                                              clear_LCD();
+1186   5                                              timer1_init();
+1187   5                                              start=1;
+1188   5                                      }       
+1189   4                                      break;  
+1190   4                              }
+1191   3                              case 23:
+1192   3                              {
+1193   4                                      stop=1;
+1194   4                                      TR1=0;
+1195   4                                      bee_Speak=0;
+1196   4                                      cover_page=2;
+1197   4                                      draw_cover_p2();
+1198   4                                      break;
+1199   4                              }
+1200   3                              case 14: {note=note_l;tune_tag=0;break;}
+1201   3                              case 24: {note=note_m;tune_tag=1;break;}
+1202   3                              case 34: {note=note_h;tune_tag=2;break;}
+1203   3                              case 44: {stop=1;draw_notes(0,1,0,0);break;}
+1204   3                              case 43: 
+1205   3                              {
+1206   4                                      uchar i =0;
+1207   4                                      Disp(1,0,10,"Deleting--");
+1208   4                                      delay_ms(5);
+1209   4                                      clear_LCD();
+1210   4                                      Disp(1,0,10,"准备录音--");      
+1211   4                                      Disp(2,0,11,"(1,3):Start");
+1212   4                                      Disp(3,0,9,"(2,3):End");
+1213   4                                      Disp(4,0,10,"(4,4):返回");
+1214   4                                      DLED_1=0;
+1215   4                                      DLED_2=1;
+1216   4                                      idx=0;
+1217   4                                      for(i=0;i<100;i++)
+1218   4                                      {
+1219   5                                              recorded_songs[i]=0;
+1220   5                                      }
+1221   4                                      break;
+1222   4                              }
+1223   3              
+1224   3                      }
+1225   2      
+1226   2                      if(start)
+1227   2                      {
+1228   3                              if(idx>96){start=0;idx=0;clear_LCD();Disp(1,0,8,"录音结束");}
+1229   3                              if(OPT_CHECK&0x01)
+1230   3                               {
+1231   4                                 if(bee_cnt>250)
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 21  
+
+1232   4                                 {
+1233   5                                      recording(tune_tag,1,idx);
+1234   5                                      draw_notes(1+tune_tag*7,1,0,0); 
+1235   5                              /*      if(bee_cnt>500)
+1236   5                                      {
+1237   5                                              if(idx>1&&recorded_songs[idx-3]==1+tune_tag*7)
+1238   5                                              {
+1239   5                                                      recorded_songs[idx+2]=1; //连音
+1240   5                                              }
+1241   5                                      } */
+1242   5                                      bee_cnt=0;
+1243   5                                      DLED_1=~DLED_1;
+1244   5                                      idx+=3;
+1245   5                                      }
+1246   4                                
+1247   4                                 TH1=note[0]>>8;
+1248   4                                 TL1=note[0]&0x00FF;
+1249   4                                 //ConfigPWM(note[0],0);
+1250   4                                 //while(OPT_CHECK&0x01);
+1251   4                                 TR1=1;
+1252   4                                 //timer_cnt=0;
+1253   4                               }
+1254   3                      
+1255   3                               else if(OPT_CHECK&0x02)
+1256   3                               {
+1257   4                                 if(bee_cnt>210)
+1258   4                                 {
+1259   5                                      recording(tune_tag,2,idx);
+1260   5                                      draw_notes(2+tune_tag*7,1,0,0); 
+1261   5                                      DLED_1=~DLED_1;
+1262   5                                      bee_cnt=0;
+1263   5                                      idx+=3;
+1264   5                                 }
+1265   4              
+1266   4                                 TH1=note[1]>>8;
+1267   4                                 TL1=note[1]&0x00FF;
+1268   4                                 //ConfigPWM(note[1],0);
+1269   4                                 //while(OPT_CHECK&0x02);
+1270   4                                 TR1=1;
+1271   4                                 //timer_cnt=0;
+1272   4                               }
+1273   3                              
+1274   3                               else if(OPT_CHECK&0x04)
+1275   3                               {
+1276   4                                 if(bee_cnt>200)
+1277   4                                 {
+1278   5                                      recording(tune_tag,3,idx);
+1279   5                                      draw_notes(3+tune_tag*7,1,0,0); 
+1280   5                                      DLED_1=~DLED_1;
+1281   5                                      bee_cnt=0;
+1282   5                                      idx+=3;
+1283   5                                 }
+1284   4              
+1285   4                                 TH1=note[2]>>8;
+1286   4                                 TL1=note[2]&0x00FF;
+1287   4                                 //ConfigPWM(note[2],0);
+1288   4                                 //while(OPT_CHECK&0x04);
+1289   4                                 TR1=1;
+1290   4                                // timer_cnt=0;
+1291   4                                 
+1292   4                               }
+1293   3                               
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 22  
+
+1294   3                               else if(OPT_CHECK&0x08)
+1295   3                               {
+1296   4                                 if(bee_cnt>200)
+1297   4                                 {
+1298   5                                      recording(tune_tag,4,idx);
+1299   5                                      draw_notes(4+tune_tag*7,1,0,0); 
+1300   5                                      DLED_1=~DLED_1;
+1301   5                                      bee_cnt=0;
+1302   5                                      idx+=3;
+1303   5                                 }
+1304   4              
+1305   4                                 TH1=note[3]>>8;
+1306   4                                 TL1=note[3]&0x00FF;
+1307   4                                 //ConfigPWM(note[3],0);
+1308   4                                 //while(OPT_CHECK&0x08);
+1309   4                                 TR1=1;
+1310   4                                // timer_cnt=0;
+1311   4                               }
+1312   3                               
+1313   3                               else if(OPT_CHECK&0x10)
+1314   3                               {
+1315   4                                 if(bee_cnt>250)
+1316   4                                 {
+1317   5                                      recording(tune_tag,5,idx);
+1318   5                                      draw_notes(5+tune_tag*7,1,0,0); 
+1319   5                                      DLED_1=~DLED_1;
+1320   5                                      bee_cnt=0;
+1321   5                                      idx+=3;
+1322   5                                      }
+1323   4              
+1324   4                                 TH1=note[4]>>8;
+1325   4                                 TL1=note[4]&0x00FF;
+1326   4                                 //ConfigPWM(note[4],0);
+1327   4                                 //while(OPT_CHECK&0x10);
+1328   4                                 TR1=1;
+1329   4                                // timer_cnt=0;
+1330   4                               }
+1331   3                               
+1332   3                               else if(OPT_CHECK&0x20)
+1333   3                               {
+1334   4                                 if(bee_cnt>200)
+1335   4                                 {
+1336   5                                      recording(tune_tag,6,idx);
+1337   5                                      draw_notes(6+tune_tag*7,1,0,0); 
+1338   5                                      bee_cnt=0;
+1339   5                                      DLED_1=~DLED_1;
+1340   5                                      idx+=3;
+1341   5                                }
+1342   4              
+1343   4                                 TH1=note[5]>>8;
+1344   4                                 TL1=note[5]&0x00FF;
+1345   4                                 //ConfigPWM(note[5],0);
+1346   4                                 //while(OPT_CHECK&0x20);
+1347   4                                 TR1=1;
+1348   4                                // timer_cnt=0;
+1349   4                               }
+1350   3                               
+1351   3                               else if(OPT_CHECK&0x40)
+1352   3                               {
+1353   4                                 if(bee_cnt>200)
+1354   4                                      {
+1355   5                                              recording(tune_tag,7,idx);
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 23  
+
+1356   5                                              draw_notes(7+tune_tag*7,1,0,0); 
+1357   5                                              DLED_1=~DLED_1;
+1358   5                                              bee_cnt=0;
+1359   5                                              idx+=3;
+1360   5                                              //bee_Speak=0;
+1361   5                                      }
+1362   4              
+1363   4                                 TH1=note[6]>>8;
+1364   4                                 TL1=note[6]&0x00FF;
+1365   4                                 /*ConfigPWM(note[6],0);
+1366   4                                 while(OPT_CHECK&0x40);
+1367   4                                 TR1=0;*/
+1368   4                                 TR1=1;
+1369   4                                // timer_cnt=0;
+1370   4                               }
+1371   3                               else
+1372   3                               {
+1373   4                                 TR1=0;
+1374   4                                 bee_Speak=0;
+1375   4                                /* if(bee_cnt>50)
+1376   4                                 {
+1377   4                                      recording(tune_tag,0);
+1378   4                                      bee_cnt=0;
+1379   4                                      stop=1;
+1380   4                                      TR1=0;
+1381   4                                      bee_Speak=0;
+1382   4                                      cover_page=2;
+1383   4                                      draw_cover_p2();
+1384   4                                      DLED_1=0;
+1385   4                                      DLED_2=1;       
+1386   4                                      idx=0;
+1387   4                                      break;
+1388   4                                 }  */
+1389   4                      /*         bee_Speak=0;
+1390   4                                 TR0=1;
+1391   4                                 if(stop_flag==0)
+1392   4                                 {
+1393   4                                       recording(tune_tag,0);
+1394   4                                       stop_flag=1;
+1395   4                                       TR0=0;
+1396   4                                      }  */
+1397   4                               }                               
+1398   3                      
+1399   3                              }                                                                                                       
+1400   2                               
+1401   2              }
+1402   1      }
+1403          
+1404          // 节奏大师：小星星练习
+1405          void practice()
+1406          {
+1407   1               unsigned char idx=0;
+1408   1               bit stop=0;
+1409   1               bit start=0;
+1410   1               uchar i=0;
+1411   1               uchar score=0;
+1412   1      
+1413   1               while(!stop)
+1414   1               {
+1415   2                      uchar key1=scankey();
+1416   2                      switch(key1)
+1417   2                      {
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 24  
+
+1418   3                      
+1419   3                              case 13:
+1420   3                              {
+1421   4                                      if(start==0)
+1422   4                                      {
+1423   5                                              clear_LCD();
+1424   5                                              timer1_init();
+1425   5                                              start=1;
+1426   5                                      }       
+1427   4                                      break;  
+1428   4                              }
+1429   3                              case 23:
+1430   3                              {
+1431   4                                      stop=1;
+1432   4                                      TR1=0;
+1433   4                                      bee_Speak=0;
+1434   4                                      cover_page=2;
+1435   4                                      draw_cover_p2();
+1436   4                                      break;
+1437   4                              }
+1438   3                              case 14: {note=note_l;tune_tag=0;break;}
+1439   3                              case 24: {note=note_m;tune_tag=1;break;}
+1440   3                              case 34: {note=note_h;tune_tag=2;break;}
+1441   3                              case 44: {stop=1;draw_notes(0,1,0,0);break;}
+1442   3                              case 43: 
+1443   3                              {
+1444   4                                      uchar i =0;
+1445   4                                      Disp(1,0,10,"Deleting--");
+1446   4                                      delay_ms(5);
+1447   4                                      clear_LCD();
+1448   4                                      Disp(1,0,10,"小星星练习");      
+1449   4                                      Disp(2,0,11,"(1,3):Start");
+1450   4                                      Disp(3,0,9,"(2,3):End");
+1451   4                                      Disp(4,0,10,"(4,4):返回");
+1452   4                                      DLED_1=0;
+1453   4                                      DLED_2=1;
+1454   4                                      idx=0;
+1455   4                                      for(i=0;i<100;i++)
+1456   4                                      {
+1457   5                                              recorded_songs[i]=0;
+1458   5                                      }
+1459   4                                      break;
+1460   4                              }
+1461   3              
+1462   3                      }
+1463   2      
+1464   2                      if(start)
+1465   2                      {
+1466   3                              if(idx>96){start=0;idx=0;clear_LCD();Disp(1,0,8,"练习结束");}
+1467   3                              if(OPT_CHECK&0x01)
+1468   3                               {
+1469   4                                 if(bee_cnt>250)
+1470   4                                 {
+1471   5                                      recording(tune_tag,1,idx);
+1472   5                                      draw_notes(1+tune_tag*7,1,0,0); 
+1473   5                              /*      if(bee_cnt>500)
+1474   5                                      {
+1475   5                                              if(idx>1&&recorded_songs[idx-3]==1+tune_tag*7)
+1476   5                                              {
+1477   5                                                      recorded_songs[idx+2]=1; //连音
+1478   5                                              }
+1479   5                                      } */
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 25  
+
+1480   5                                      bee_cnt=0;
+1481   5                                      DLED_1=~DLED_1;
+1482   5                                      idx+=3;
+1483   5                                      }
+1484   4                                
+1485   4                                 TH1=note[0]>>8;
+1486   4                                 TL1=note[0]&0x00FF;
+1487   4                                 //ConfigPWM(note[0],0);
+1488   4                                 //while(OPT_CHECK&0x01);
+1489   4                                 TR1=1;
+1490   4                                 //timer_cnt=0;
+1491   4                               }
+1492   3                      
+1493   3                               else if(OPT_CHECK&0x02)
+1494   3                               {
+1495   4                                 if(bee_cnt>210)
+1496   4                                 {
+1497   5                                      recording(tune_tag,2,idx);
+1498   5                                      draw_notes(2+tune_tag*7,1,0,0); 
+1499   5                                      DLED_1=~DLED_1;
+1500   5                                      bee_cnt=0;
+1501   5                                      idx+=3;
+1502   5                                 }
+1503   4              
+1504   4                                 TH1=note[1]>>8;
+1505   4                                 TL1=note[1]&0x00FF;
+1506   4                                 //ConfigPWM(note[1],0);
+1507   4                                 //while(OPT_CHECK&0x02);
+1508   4                                 TR1=1;
+1509   4                                 //timer_cnt=0;
+1510   4                               }
+1511   3                              
+1512   3                               else if(OPT_CHECK&0x04)
+1513   3                               {
+1514   4                                 if(bee_cnt>200)
+1515   4                                 {
+1516   5                                      recording(tune_tag,3,idx);
+1517   5                                      draw_notes(3+tune_tag*7,1,0,0); 
+1518   5                                      DLED_1=~DLED_1;
+1519   5                                      bee_cnt=0;
+1520   5                                      idx+=3;
+1521   5                                 }
+1522   4              
+1523   4                                 TH1=note[2]>>8;
+1524   4                                 TL1=note[2]&0x00FF;
+1525   4                                 //ConfigPWM(note[2],0);
+1526   4                                 //while(OPT_CHECK&0x04);
+1527   4                                 TR1=1;
+1528   4                                // timer_cnt=0;
+1529   4                                 
+1530   4                               }
+1531   3                               
+1532   3                               else if(OPT_CHECK&0x08)
+1533   3                               {
+1534   4                                 if(bee_cnt>200)
+1535   4                                 {
+1536   5                                      recording(tune_tag,4,idx);
+1537   5                                      draw_notes(4+tune_tag*7,1,0,0); 
+1538   5                                      DLED_1=~DLED_1;
+1539   5                                      bee_cnt=0;
+1540   5                                      idx+=3;
+1541   5                                 }
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 26  
+
+1542   4              
+1543   4                                 TH1=note[3]>>8;
+1544   4                                 TL1=note[3]&0x00FF;
+1545   4                                 //ConfigPWM(note[3],0);
+1546   4                                 //while(OPT_CHECK&0x08);
+1547   4                                 TR1=1;
+1548   4                                // timer_cnt=0;
+1549   4                               }
+1550   3                               
+1551   3                               else if(OPT_CHECK&0x10)
+1552   3                               {
+1553   4                                 if(bee_cnt>250)
+1554   4                                 {
+1555   5                                      recording(tune_tag,5,idx);
+1556   5                                      draw_notes(5+tune_tag*7,1,0,0); 
+1557   5                                      DLED_1=~DLED_1;
+1558   5                                      bee_cnt=0;
+1559   5                                      idx+=3;
+1560   5                                      }
+1561   4              
+1562   4                                 TH1=note[4]>>8;
+1563   4                                 TL1=note[4]&0x00FF;
+1564   4                                 //ConfigPWM(note[4],0);
+1565   4                                 //while(OPT_CHECK&0x10);
+1566   4                                 TR1=1;
+1567   4                                // timer_cnt=0;
+1568   4                               }
+1569   3                               
+1570   3                               else if(OPT_CHECK&0x20)
+1571   3                               {
+1572   4                                 if(bee_cnt>200)
+1573   4                                 {
+1574   5                                      recording(tune_tag,6,idx);
+1575   5                                      draw_notes(6+tune_tag*7,1,0,0); 
+1576   5                                      bee_cnt=0;
+1577   5                                      DLED_1=~DLED_1;
+1578   5                                      idx+=3;
+1579   5                                }
+1580   4              
+1581   4                                 TH1=note[5]>>8;
+1582   4                                 TL1=note[5]&0x00FF;
+1583   4                                 //ConfigPWM(note[5],0);
+1584   4                                 //while(OPT_CHECK&0x20);
+1585   4                                 TR1=1;
+1586   4                                // timer_cnt=0;
+1587   4                               }
+1588   3                               
+1589   3                               else if(OPT_CHECK&0x40)
+1590   3                               {
+1591   4                                 if(bee_cnt>200)
+1592   4                                      {
+1593   5                                              recording(tune_tag,7,idx);
+1594   5                                              draw_notes(7+tune_tag*7,1,0,0); 
+1595   5                                              DLED_1=~DLED_1;
+1596   5                                              bee_cnt=0;
+1597   5                                              idx+=3;
+1598   5                                              //bee_Speak=0;
+1599   5                                      }
+1600   4              
+1601   4                                 TH1=note[6]>>8;
+1602   4                                 TL1=note[6]&0x00FF;
+1603   4                                 /*ConfigPWM(note[6],0);
+C51 COMPILER V9.00   MAIN                                                                  08/22/2020 14:12:00 PAGE 27  
+
+1604   4                                 while(OPT_CHECK&0x40);
+1605   4                                 TR1=0;*/
+1606   4                                 TR1=1;
+1607   4                                // timer_cnt=0;
+1608   4                               }
+1609   3                               else
+1610   3                               {
+1611   4                                 TR1=0;
+1612   4                                 bee_Speak=0;
+1613   4      
+1614   4                               }                               
+1615   3                      
+1616   3                              }                                                                                                       
+1617   2                               
+1618   2              }
+1619   1      
+1620   1              clear_LCD();
+1621   1              Disp(1,0,8,"Result--");
+1622   1              
+1623   1              for(i=0;i<42;i+=3)
+1624   1              {
+1625   2                      if(recorded_songs[i]==little_star[i])score++;   
+1626   2              }
+1627   1              if(score>35)Disp(2,0,6,"Great!");
+1628   1              else if(score>20&&score<=35)Disp(2,0,6,"Good~~");
+1629   1              else if(score>10&&score<=20)Disp(2,0,6,"Nice~~");
+1630   1              else Disp(2,0,8,"Not-Good");
+1631   1              delay_ms(6);
+1632   1              clear_LCD();
+1633   1              idx=0;
+1634   1              for(i=0;i<100;i++)
+1635   1              {
+1636   2                      recorded_songs[i]=0;
+1637   2              }
+1638   1      
+1639   1      
+1640   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   5225    ----
+   CONSTANT SIZE    =   2755    ----
+   XDATA SIZE       =    100    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     33      40
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      8       9
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)
